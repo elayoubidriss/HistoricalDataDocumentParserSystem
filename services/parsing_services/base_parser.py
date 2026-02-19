@@ -63,20 +63,37 @@ class BaseParser(abc.ABC):
             return []
 
     def _format_extracted_data(self, extracted_data: List[Dict]) -> List[Dict[str, str]]:
-        """Format extracted data to match expected output structure."""
+        """Format extracted data to match expected output structure.
+
+        Applies column_mapping from settings to rename internal field names
+        to the configured output column names.
+        """
+        mapping = self.settings.column_mapping
         formatted_data = []
 
+        # Internal keys with their default values
+        defaults = {
+            "mission_name": "Not specified",
+            "entity": "Not specified",
+            "thematiques": "Not specified",
+            "data_type": "",
+            "content": "",
+        }
+
         for item in extracted_data:
-            formatted_item = {
-                "mission_name": item.get("mission_name", "Not specified"),
-                "entity": item.get("entity", "Not specified"),
-                "thematiques": item.get("thematiques", "Not specified"),
-                "data_type": item.get("data_type", ""),
-                "content": item.get("content", "")
-            }
+            formatted_item = {}
+            for internal_key, default_val in defaults.items():
+                output_col = mapping.get(internal_key, internal_key)
+                formatted_item[output_col] = item.get(internal_key, default_val)
             formatted_data.append(formatted_item)
 
         return formatted_data
+
+    def get_output_columns(self) -> List[str]:
+        """Return ordered list of output column names based on column_mapping."""
+        internal_order = ["mission_name", "entity", "thematiques", "data_type", "content"]
+        mapping = self.settings.column_mapping
+        return [mapping.get(key, key) for key in internal_order]
 
     @abc.abstractmethod
     def _create_extraction_prompt(self, text: str) -> str:

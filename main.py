@@ -1,8 +1,6 @@
 import os
 import sys
 from pathlib import Path
-import pandas as pd
-from typing import Literal
 
 # Configuration du cache Hugging Face dans votre répertoire utilisateur
 os.environ["HF_HOME"] = r"C:\Users\driss.elayoubi\hf_cache"
@@ -38,17 +36,28 @@ from services.embeddings_services.embeddings_service import EmbeddingsService
 from services.parsing_services.batch_processor import BatchProcessor
 
 
-def get_parser_settings(document_type):
-    """Return appropriate parser settings based on document type"""
+def get_parser_settings(document_type, column_overrides=None):
+    """Return appropriate parser settings based on document type.
+
+    Args:
+        document_type: The type of document to parse.
+        column_overrides: Optional dict mapping document_type to column_mapping dicts.
+            Each column_mapping maps internal field names to custom output column names.
+            Internal field names: mission_name, entity, thematiques, data_type, content.
+    """
+    extra_kwargs = {}
+    if column_overrides and document_type in column_overrides:
+        extra_kwargs["column_mapping"] = column_overrides[document_type]
+
     parser_mapping = {
-        "lettre_de_mission": LettreDeMissionParserSettings(extract_summaries=False),
-        "work_program": WorkProgramParserSettings(extract_summaries=False),
-        "synthese_de_preparation": SynthesePreparationParserSettings(extract_summaries=False),
-        "kick_off": SupportKickoffParserSettings(extract_summaries=False),
-        "rapport_final": RapportFinalParserSettings(extract_summaries=False),
-        "restitution_final": RestitutionFinalParserSettings(extract_summaries=False),
+        "lettre_de_mission": LettreDeMissionParserSettings(extract_summaries=False, **extra_kwargs),
+        "work_program": WorkProgramParserSettings(extract_summaries=False, **extra_kwargs),
+        "synthese_de_preparation": SynthesePreparationParserSettings(extract_summaries=False, **extra_kwargs),
+        "kick_off": SupportKickoffParserSettings(extract_summaries=False, **extra_kwargs),
+        "rapport_final": RapportFinalParserSettings(extract_summaries=False, **extra_kwargs),
+        "restitution_final": RestitutionFinalParserSettings(extract_summaries=False, **extra_kwargs),
     }
-    return parser_mapping.get(document_type, LettreDeMissionParserSettings(extract_summaries=False))
+    return parser_mapping.get(document_type, LettreDeMissionParserSettings(extract_summaries=False, **extra_kwargs))
 
 
 def main():
@@ -64,6 +73,19 @@ def main():
     input_root_dir = "./inputs"
     output_file = "./outputs/historical_data_ingestion_output.xlsx"
 
+    # Optional: define custom column names per document type.
+    # Uncomment and modify to rename output columns for specific document types.
+    # column_overrides = {
+    #     "lettre_de_mission": {
+    #         "mission_name": "Nom de la Mission",
+    #         "entity": "Entité",
+    #         "thematiques": "Thématiques",
+    #         "data_type": "Type de Donnée",
+    #         "content": "Contenu",
+    #     },
+    # }
+    column_overrides = None
+
     # Collect all files from subdirectories
     all_files = []
     for root, dirs, files in os.walk(input_root_dir):
@@ -71,26 +93,15 @@ def main():
             if file.endswith(('.pdf', '.docx', '.pptx')):
                 document_type = os.path.basename(root)
                 file_path = os.path.join(root, file)
-                parser_settings = get_parser_settings(document_type)
+                parser_settings = get_parser_settings(document_type, column_overrides)
                 all_files.append((file_path, parser_settings))
 
     # Process files and export to Excel
     processor = BatchProcessor()
     parsed_data = processor.process_files(all_files)
 
-    # Group data by document type for separate Excel sheets
-    data_by_type = {}
-    for file_path, data in zip([f[0] for f in all_files], parsed_data):
-        document_type = os.path.basename(os.path.dirname(file_path))
-        if document_type not in data_by_type:
-            data_by_type[document_type] = []
-        data_by_type[document_type].extend(data)
-
-    # Write to Excel with multiple sheets
-    with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-        for doc_type, data in data_by_type.items():
-            df = pd.DataFrame(data)
-            df.to_excel(writer, sheet_name=doc_type[:31], index=False)  # Sheet name max 31 chars
+    # Export using BatchProcessor (respects column_mapping per parser type)
+    processor.to_excel(parsed_data, output_file)
 
     print("Processing completed successfully!")
     print(f"Output saved to {output_file}")

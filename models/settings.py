@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
-from typing import Literal, Union
+from typing import Dict, Literal, Union
 
 
 class BaseLLMSettings(BaseModel):
@@ -93,6 +93,13 @@ class VLLMEmbeddingsSettings(BaseEmbeddingsSettings):
 
 class BaseParserSettings(BaseModel):
     type: str
+    column_mapping: Dict[str, str] = Field(default_factory=lambda: {
+        "mission_name": "mission_name",
+        "entity": "entity",
+        "thematiques": "thematiques",
+        "data_type": "data_type",
+        "content": "content",
+    })
 
 
 class PipelineSettings(BaseSettings):
@@ -125,11 +132,11 @@ class SupportKickoffParserSettings(BaseParserSettings):
     extract_summaries: bool = True
 
 
-class RapportFinalParserSettings:
+class RapportFinalParserSettings(BaseParserSettings):
     type: Literal['rapport_final_parser'] = 'rapport_final_parser'
     extract_summaries: bool = True
 
 
-class RestitutionFinalParserSettings:
+class RestitutionFinalParserSettings(BaseParserSettings):
     type: Literal['restitution_final_parser'] = 'restitution_final_parser'
     extract_summaries: bool = True
